@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard - OCS</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="dashboard-card">
+            <div class="header">
+                <div>
+                    <h1>Student Dashboard</h1>
+                    <p class="user-info">Welcome, <span id="user-name"></span></p>
+                </div>
+                <button onclick="logout()" class="btn btn-secondary">Logout</button>
+            </div>
+            
+            <div id="message-area"></div>
+            
+            <!-- Selected Offers Section -->
+            <div id="selected-section" style="display: none;">
+                <h2>Selected Offers</h2>
+                <div id="selected-offers"></div>
+            </div>
+            
+            <!-- Accepted Offer Section -->
+            <div id="accepted-section" style="display: none;">
+                <div class="congratulations">
+                    <h2>🎉 Congratulations!</h2>
+                    <p id="accepted-message"></p>
+                </div>
+            </div>
+            
+            <!-- Available Profiles Section -->
+            <div id="profiles-section">
+                <h2>Available Profiles</h2>
+                <table id="profiles-table">
+                    <thead>
+                        <tr>
+                            <th>Profile Code</th>
+                            <th>Company</th>
+                            <th>Designation</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="profiles-body"></tbody>
+                </table>
+            </div>
+            
+            <!-- My Applications Section -->
+            <div class="section">
+                <h2>My Applications</h2>
+                <table id="applications-table">
+                    <thead>
+                        <tr>
+                            <th>Profile Code</th>
+                            <th>Company</th>
+                            <th>Designation</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="applications-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module" src="/js/student.js"></script>
+</body>
+</html>
