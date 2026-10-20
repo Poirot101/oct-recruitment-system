@@ -11,7 +11,8 @@ molecular-mechanics simulations of disordered solids.
   (see `src/README.md`).
 - `results/`: the generated glasses, yield-stress maps, trained models and metrics.
 
-Headline: adaptive certified strain stepping gives the exact local yield stress map 8–13×
-faster. A soft-mode reduced-order model with a learned corrector ranks weak sites
-about 100× faster still (Spearman ≈ 0.45), which is enough to screen the weakest sites
-before running the exact scan.
+Headline: adaptive certified strain stepping with a looser minimiser tolerance gives the exact
+local yield stress map 18× faster, with every yield stress still matching the baseline. A
+soft-mode reduced-order model ranks weak sites about 75× faster still (Spearman ≈ 0.5 on the
+weakest direction), but screening with it saves only about 2× more at 89% recall. Across 200
+real plastic events, the exact map is the best predictor and per-atom energy comes close.

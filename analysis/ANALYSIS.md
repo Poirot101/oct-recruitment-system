@@ -22,7 +22,8 @@ then tests three levels of acceleration on the same samples:
 |---|---|---|
 | Baseline LYS scan (fixed Δγ = 1e-4) | ≈ 6300 s (extrapolated from 48 sites) | reference |
 | **Adaptive certified stepping**, exact setting | ≈ 770 s (**8.2×**) | 288/288 τ_c within 1e-3 |
-| **Adaptive certified stepping**, fast setting (used for the dataset) | 453 s (**13.4×**) | 287/288 τ_c within 1e-3; weakest direction 48/48 |
+| **Adaptive certified stepping**, fast setting (round-1 dataset) | 453 s (**13.4×**) | 287/288 τ_c within 1e-3; weakest direction 48/48 |
+| **Adaptive stepping + f_max < 1e-6** (round-2 dataset) | 333 s (**18–19×**) | 288/288 τ_c within 1e-3 |
 | **Soft-mode reduced-order estimate**, no learning | 4.5 s (**≈ 1400×**) | Spearman 0.24 (all), 0.38 (weakest direction) |
 | **Soft modes + gradient boosting** | 4.5 s | Spearman 0.41 (all), 0.48 (weakest direction) |
 | **Soft modes + GNN** | 4.6 s | Spearman 0.43 (all), 0.47 (weakest direction) |
@@ -51,6 +52,14 @@ Three findings:
    10% of sites inside the predicted weakest 50% (Sect. 4.3). That supports a
    **screen-then-verify** workflow: rank all sites cheaply, then run the exact adaptive LYS
    only where it matters.
+
+**Round-2 update (20 glasses, 200 plastic events; Sect. 4.5).** Loosening the minimiser
+tolerance to f_max < 1e-6 lifts the exact speed-up to **18×**, with 288/288 yield stresses still
+matching. More training data barely moves the physics-informed surrogates (Spearman ≈ 0.49 on the
+weakest direction), and screening the weakest half of the sites saves only 2× at 89% recall.
+A raw-structure GNN starts learning only beyond about 8 glasses. On real plastic events, the
+exact LYS map is the best predictor, but per-atom potential energy comes close, which points to a
+cheap extra feature for the next model.
 
 ## 2. What the main paper says about cost (Bamer et al. 2023)
 
@@ -215,10 +224,70 @@ noisy to rank the surrogates against each other. They do confirm that the exact 
 at the early events, as reported by Patinet et al. (2016) and Barbot et al. (2018). A proper
 test needs many more glasses and events (Sect. 5).
 
-### 4.5 Limits of this study
+### 4.5 Round 2: tolerances, more data, and a proper event test
 
-* 2D, a single quench protocol, N = 1024, 8 glasses (5 train, 1 validation, 2 test). The
-  surrogate numbers carry roughly ±0.05 of glass-to-glass spread (compare the two test glasses).
+Round 2 grew the dataset from 8 to 20 glasses (20 480 sites × 6 directions, all with exact
+LYS maps) and sheared every glass globally to collect 200 early plastic events. Code:
+`scripts/benchmark_lys_more.py`, `scripts/round2_study.py`, `scripts/round2_figures.py`;
+numbers in `results/benchmark_lys_more.json`, `results/benchmark_ftol.json`, `results/round2.json`.
+
+**Step size and minimiser tolerance.** Increasing the coarse step beyond Δγ = 4e-3 gains nothing,
+because the speed-up plateaus at about 13×. The minimiser tolerance helps instead. The baseline
+relaxes to f_max < 1e-9, but the adaptive scan with `slope_frac = 0.9` and f_max < 1e-6 still
+reproduces all 288 baseline τ_c values within 1e-3, and on the weakest direction 48/48. It runs
+**18.1×** faster than the original baseline (16.3 s against 295.5 s on 48 sites). For a fair
+comparison, the baseline itself at f_max < 1e-6 takes 170 s, so stepping alone contributes
+10.4× and the looser tolerance the rest. Over the 12 new glasses a full 1024-site, 6-direction
+map now takes 333 s on 4 cores, against ≈ 6300 s for the baseline.
+
+**Data scaling** (fixed test set of 6 glasses, training on 2–13 glasses):
+
+![Data scaling](figures/round2_scaling.png)
+
+The physics-informed surrogates are already near their ceiling at two glasses. Soft modes with
+boosting move from 0.48 to 0.52 in Spearman on the weakest direction, and soft modes with a GNN
+from 0.44 to 0.49. The GNN on raw structure, which had no skill in round 1, starts to learn
+between 8 and 13 glasses (0.09 to 0.39). This matches the GFF-MAP observation that raw-structure
+models need large datasets. A raw-structure model is the only one here still clearly improving
+with data, so it is the one worth scaling up (Sect. 5).
+
+**Cross-validated screening** (5 folds over all 20 glasses):
+
+| Weakness field | Spearman (all) | Spearman (weakest direction) | Recall of weakest 10% in predicted 10% / 30% / 50% |
+|---|---|---|---|
+| Soft modes + boosting | 0.42 | 0.49 | 0.42 / 0.72 / 0.89 |
+| Soft modes + GNN | 0.42 | 0.48 | 0.35 / 0.69 / 0.89 |
+| Soft-mode estimate alone | 0.22 | 0.38 | 0.43 / 0.76 / 0.90 |
+| Per-atom potential energy | 0.04 | 0.06 | 0.13 / 0.34 / 0.54 |
+
+The learned models improve the overall ranking, but the raw soft-mode estimate is as good or
+better at finding the weakest tail, which is what screening needs. With the exact scan at 333 s
+per map, verifying the predicted weakest 50% recovers 89% of the weakest 10% in 171 s. That is a
+**2× saving**, much smaller than the stepping gain, and it costs about one weak site in ten.
+
+**Plastic events** (first 10 events in each of 20 glasses, 200 events, θ = 0 field, 95%
+bootstrap intervals over glasses):
+
+![Plastic events](figures/round2_events.png)
+
+The exact LYS map places the yielding atom at a mean percentile of 0.28 (0.24–0.32), and 33% of
+the early events fall in its weakest 10% of sites (random: 9%). The soft-mode surrogates sit
+between the exact map and random (0.34–0.41). This is the expected order and confirms the
+round-1 trend with statistically separated intervals.
+
+The surprise is per-atom potential energy. It has no rank correlation with the LYS map (0.04),
+yet it predicts the yielding atom almost as well as the exact map (0.30, 63% of events in its
+weakest 30% against 64% for LYS). One plausible reading, not tested here, is that the event atom
+is picked as the largest non-affine displacement, which may favour loosely packed, high-energy
+atoms at the core of a rearrangement rather than the site whose local yield stress is lowest. If
+that holds, combining energy with the LYS or soft-mode field should beat either alone. Testing
+that combination, and locating events by the cluster centre instead of a single atom, are the
+obvious next experiments.
+
+### 4.6 Limits of this study
+
+* 2D, a single quench protocol, N = 1024. Round 1 used 8 glasses (5 train, 1 validation, 2 test),
+  and round 2 extends this to 20 glasses with 5-fold cross-validation (Sect. 4.5).
 * The LYS scan uses 6 directions and simple shear only. Barbot et al. also analyse pure shear
   and finer angular grids.
 * The soft-mode estimate uses the undeformed Hessian. Modes rotate and hybridise under load
@@ -230,21 +299,26 @@ test needs many more glasses and events (Sect. 5).
 
 In order of payoff per effort:
 
-1. **Adopt adaptive certified stepping in every AQS/LYS code** (exact, 8–13× here). The changes
-   are local to the strain loop: a secant predictor, an elasticity check, and bisection to the
-   original grid. Use `slope_frac ≈ 0.8`, and validate once per new material against the fixed-step
-   baseline with `scripts/benchmark_lys.py`.
+1. **Adopt adaptive certified stepping in every AQS/LYS code, with a looser minimiser tolerance**
+   (exact, 18× here: Δγ_coarse = 4e-3, `slope_frac = 0.9`, f_max < 1e-6). The changes are local
+   to the strain loop: a secant predictor, an elasticity check, and bisection to the original
+   grid. Validate once per new material against the fixed-step baseline with
+   `scripts/benchmark_lys.py`. This is by far the largest saving found in this study.
 2. **Compile the whole minimise-and-load loop** (numba here; Julia already does this when written type-stably)
    and use FIRE instead of line-search CG (Bitzek et al. 2006; FIRE 2.0, Guénolé et al. 2020).
    The scan is embarrassingly parallel over sites, and each cluster has only about 200 atoms, so
    batching thousands of clusters on a GPU (JAX/CUDA) is the next order of magnitude.
-3. **Screen-then-verify with the soft-mode surrogate.** Rank all sites in seconds and run the exact
-   scan only on the predicted weakest 30–50%. Check recall on a few fully scanned glasses per new
-   material, as in Sect. 4.3.
-4. **Grow the dataset with the cheap exact scan, then train a symmetry-aware model.** τ_c(θ) is
+3. **Screen-then-verify with the soft-mode estimate.** Rank all sites in seconds and run the exact
+   scan only on the predicted weakest 50%. Round 2 shows this halves the cost at 89–90% recall of
+   the weakest sites, and the plain soft-mode estimate does this as well as the learned models
+   (Sect. 4.5). Use it when only the weak tail matters, not for full maps.
+4. **Grow the dataset with the cheap exact scan, then train a symmetry-aware model.** The
+   raw-structure GNN only starts learning between 8 and 13 glasses (Sect. 4.5), and the
+   physics-feature models have plateaued, so data is now the bottleneck for learned models. τ_c(θ) is
    π-periodic, so predict its Fourier coefficients in 2θ with an E(2)-equivariant network
    (in the spirit of NequIP, Batzner et al. 2022). The symmetry is then exact rather than augmented,
-   which should reduce the data the raw-structure model needs. Bapst et al. (2020) showed GNNs can
+   which should reduce the data the raw-structure model needs. Add per-atom energy as an input:
+   it predicts real plastic events almost as well as the exact LYS map (Sect. 4.5). Bapst et al. (2020) showed GNNs can
    read glassy dynamics from static structure when data is plentiful.
 5. **Active learning.** Use model uncertainty (ensembles) to choose which sites get the exact scan,
    mirroring how GFF-MAP uses multiple SEVMs per pore for robust, probabilistic screening.

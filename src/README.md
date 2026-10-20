@@ -24,3 +24,14 @@ cd .. && PYTHONPATH=src python src/scripts/make_figures.py
 ```
 
 `results/bench_glass.npz` is the benchmark glass (seed 3); `glass.make_glass(seed=3)` regenerates it.
+
+## Round 2 (about 1.5 h more on 4 cores)
+
+```bash
+python scripts/benchmark_lys_more.py   # larger coarse steps and looser minimiser tolerance
+python scripts/make_dataset.py ../results/data 18 19 20 21 22 23 24 25 26 27 28 29 --aqs
+python scripts/add_aqs.py ../results/data 10 11 12 13 14 15
+python scripts/softmode_features.py ../results/data ../results/softmode 18 19 20 21 22 23 24 25 26 27 28 29
+python scripts/round2_study.py ../results/data ../results/softmode ../results/round2.json
+python scripts/round2_figures.py ../results/round2.json ../analysis/figures
+```
