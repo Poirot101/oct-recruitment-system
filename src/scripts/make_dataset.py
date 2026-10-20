@@ -20,7 +20,7 @@ for seed in seeds:
     pos, types, L, info = glass.make_glass(n=1024, density=1.0, n_equil=10000,
                                            n_quench=20000, seed=seed)
     t_gen = time.perf_counter() - t0
-    lys = glass.lys_map(pos, types, L, mode=1, dg_coarse=2e-3, slope_frac=0.8)
+    lys = glass.lys_map(pos, types, L, mode=1, dg_coarse=4e-3, slope_frac=0.8)
     pi, pj = sim.build_nlist(pos, L, 0.0, sim.RCMAX + 0.4)
     epot = sim.per_atom_energy(pos, types, pi, pj, L, 0.0, *glass.P)
     out = dict(pos=pos, types=types, L=L, tau0=lys["tau0"], tauc=lys["tauc"],

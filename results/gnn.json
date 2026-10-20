@@ -1,0 +1,97 @@
+{
+ "train": [
+  10,
+  11,
+  12,
+  13,
+  14
+ ],
+ "val": [
+  15
+ ],
+ "test": [
+  16,
+  17
+ ],
+ "epochs": 400,
+ "train_wall_s": 81.63240738200057,
+ "best_val_mse": 0.1360187530517578,
+ "glasses": [
+  {
+   "seed": 16,
+   "gnn_inference_s": 0.011457306000011158,
+   "lys_wall_s": 483.1774796720001,
+   "lys_minimiser_iterations": 93014122,
+   "r2_all": -0.048949599266052246,
+   "spearman_all": -0.13914589977387437,
+   "r2_min_theta": -1.101285457611084,
+   "spearman_min_theta": 0.12309569159455154,
+   "spearman_theta0": -0.058515138849152416,
+   "n_events": 17,
+   "events": {
+    "lys_true": {
+     "mean_pct_first": 0.20117302052785924,
+     "frac_in_softest10_first": 0.4,
+     "mean_pct_all": 0.25944454027945485,
+     "frac_in_softest10_all": 0.35294117647058826
+    },
+    "gnn": {
+     "mean_pct_first": 0.5126099706744868,
+     "frac_in_softest10_first": 0.0,
+     "mean_pct_all": 0.5018112816974297,
+     "frac_in_softest10_all": 0.0
+    },
+    "epot_smoothed": {
+     "mean_pct_first": 0.2694037145650049,
+     "frac_in_softest10_first": 0.4,
+     "mean_pct_all": 0.25438445172790525,
+     "frac_in_softest10_all": 0.4117647058823529
+    },
+    "random": {
+     "mean_pct_first": 0.6336265884652981,
+     "frac_in_softest10_first": 0.1,
+     "mean_pct_all": 0.5920303605313093,
+     "frac_in_softest10_all": 0.058823529411764705
+    }
+   }
+  },
+  {
+   "seed": 17,
+   "gnn_inference_s": 0.10060031299963157,
+   "lys_wall_s": 439.95685030100003,
+   "lys_minimiser_iterations": 85186104,
+   "r2_all": -0.012407302856445312,
+   "spearman_all": -0.015655835938674575,
+   "r2_min_theta": -3.0534887313842773,
+   "spearman_min_theta": 0.10178115612259495,
+   "spearman_theta0": 0.0039693490272512694,
+   "n_events": 22,
+   "events": {
+    "lys_true": {
+     "mean_pct_first": 0.29423264907135877,
+     "frac_in_softest10_first": 0.3,
+     "mean_pct_all": 0.3724784501910602,
+     "frac_in_softest10_all": 0.13636363636363635
+    },
+    "gnn": {
+     "mean_pct_first": 0.29188660801564026,
+     "frac_in_softest10_first": 0.4,
+     "mean_pct_all": 0.42362036790189284,
+     "frac_in_softest10_all": 0.2727272727272727
+    },
+    "epot_smoothed": {
+     "mean_pct_first": 0.5424242424242425,
+     "frac_in_softest10_first": 0.0,
+     "mean_pct_all": 0.44974673420421224,
+     "frac_in_softest10_all": 0.09090909090909091
+    },
+    "random": {
+     "mean_pct_first": 0.4295210166177908,
+     "frac_in_softest10_first": 0.0,
+     "mean_pct_all": 0.45956633786545814,
+     "frac_in_softest10_all": 0.045454545454545456
+    }
+   }
+  }
+ ]
+}

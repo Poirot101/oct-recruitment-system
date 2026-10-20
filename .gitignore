@@ -2,6 +2,6 @@ __pycache__/
 *.pyc
 .venv/
 .ipynb_checkpoints/
-data/raw/
 *.log
+!results/data/make.log
 .env*

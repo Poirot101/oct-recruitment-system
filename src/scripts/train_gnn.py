@@ -22,6 +22,8 @@ ap.add_argument("--epochs", type=int, default=400)
 ap.add_argument("--hidden", type=int, default=64)
 ap.add_argument("--layers", type=int, default=6)
 ap.add_argument("--first-events", type=int, default=10)
+ap.add_argument("--softdir", default=None,
+                help="add soft-mode node features (hybrid GNN)")
 args = ap.parse_args()
 torch.manual_seed(0)
 torch.set_num_threads(4)
@@ -30,7 +32,19 @@ torch.set_num_threads(4)
 def load(seed):
     d = dict(np.load(f"{args.datadir}/glass_{seed}.npz"))
     x, ei, rel = gnn.build_graph(d["pos"], d["types"], float(d["L"]))
-    return dict(seed=seed, raw=d, x=torch.tensor(x), ei=torch.tensor(ei), rel=torch.tensor(rel),
+    xd = None
+    if args.softdir:
+        sm = np.load(f"{args.softdir}/softmode_{seed}.npz")
+        lam, kap, h = sm["lam"], sm["kappa"], sm["h"]
+        den = 2.0 * kap[:, None, :] * h
+        with np.errstate(divide="ignore", invalid="ignore"):
+            gk = np.where(den < 0, -lam[:, None, :] ** 2 / den, np.inf)
+        gmin = np.log(np.minimum(gk.min(2), 1.0))
+        # direction-indexed node features: rolled together with the targets
+        xd = torch.tensor(np.stack([gmin, d["tau0"] * 5.0], -1).astype(np.float32))
+        lam0 = np.log(np.maximum(lam[:, :3], 1e-6)).astype(np.float32)
+        x = np.concatenate([x, lam0], 1)
+    return dict(seed=seed, raw=d, x=torch.tensor(x), xd=xd, ei=torch.tensor(ei), rel=torch.tensor(rel),
                 types=torch.tensor(d["types"]),
                 y=torch.tensor((d["tauc"] - d["tau0"]).astype(np.float32)))
 
@@ -41,7 +55,15 @@ test = [load(s) for s in args.test]
 n_theta = train[0]["y"].shape[1]
 scale = float(torch.cat([s["y"] for s in train]).std())
 
-model = gnn.LYSNet(n_out=n_theta, hidden=args.hidden, layers=args.layers)
+n_in = train[0]["x"].shape[1] + (0 if train[0]["xd"] is None else train[0]["xd"][0].numel())
+model = gnn.LYSNet(n_out=n_theta, hidden=args.hidden, layers=args.layers, n_in=n_in)
+
+
+def node_input(s, k=0):
+    if s["xd"] is None:
+        return s["x"]
+    xd = torch.roll(s["xd"], k, dims=1).reshape(s["x"].shape[0], -1)
+    return torch.cat([s["x"], xd], 1)
 opt = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=1e-5)
 sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, args.epochs)
 
@@ -49,7 +71,7 @@ sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, args.epochs)
 def loss_on(s, k=0):
     rel = gnn.rotate(s["rel"], k, n_theta) if k else s["rel"]
     e = gnn.edge_features(rel, s["types"], s["ei"])
-    pred = model(s["x"], s["ei"], e) * scale
+    pred = model(node_input(s, k), s["ei"], e) * scale
     y = torch.roll(s["y"], k, dims=1)
     return torch.mean((pred - y) ** 2)
 
@@ -100,7 +122,8 @@ report = {"train": args.train, "val": args.val, "test": args.test, "epochs": arg
           "train_wall_s": train_wall, "best_val_mse": best, "glasses": []}
 for s in test:
     t1 = time.perf_counter()
-    pred = gnn.predict(model, s) * scale
+    with torch.no_grad():
+        pred = model(node_input(s), s["ei"], gnn.edge_features(s["rel"], s["types"], s["ei"])).numpy() * scale
     infer = time.perf_counter() - t1
     y = s["y"].numpy()
     raw = s["raw"]

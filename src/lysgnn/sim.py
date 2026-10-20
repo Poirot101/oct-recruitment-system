@@ -553,3 +553,209 @@ def lys_all(pos, types, L, centers, thetas, r_free, mode, dg_min, dg_coarse, gma
             gc[k, m] = c
             its[k, m] = d
     return tau0, tauc, gc, its
+
+
+# ---------------------------------------------------------------------------
+# Soft-mode reduced-order predictor of the local yield strain
+# ---------------------------------------------------------------------------
+
+@njit(cache=True, fastmath=True)
+def cluster_hessian(x, types, nfree, ci, cj, sig, eps, rc, rc2, us, dus):
+    """Dense Hessian of the cluster energy w.r.t. the free-atom coordinates."""
+    H = np.zeros((2 * nfree, 2 * nfree))
+    for k in range(ci.shape[0]):
+        i = ci[k]
+        j = cj[k]
+        if i >= nfree and j >= nfree:
+            continue
+        a = types[i]
+        b = types[j]
+        dx = x[i, 0] - x[j, 0]
+        dy = x[i, 1] - x[j, 1]
+        r2 = dx * dx + dy * dy
+        if r2 >= rc2[a, b]:
+            continue
+        r = math.sqrt(r2)
+        s2 = sig[a, b] * sig[a, b] / r2
+        sr6 = s2 * s2 * s2
+        sr12 = sr6 * sr6
+        e = eps[a, b]
+        du = 24.0 * e / r * (sr6 - 2.0 * sr12) - dus[a, b]
+        d2u = 24.0 * e / r2 * (26.0 * sr12 - 7.0 * sr6)
+        ux = dx / r
+        uy = dy / r
+        u = (ux, uy)
+        for p in range(2):
+            for q in range(2):
+                kpq = (d2u - du / r) * u[p] * u[q]
+                if p == q:
+                    kpq += du / r
+                if i < nfree:
+                    H[2 * i + p, 2 * i + q] += kpq
+                if j < nfree:
+                    H[2 * j + p, 2 * j + q] += kpq
+                if i < nfree and j < nfree:
+                    H[2 * i + p, 2 * j + q] -= kpq
+                    H[2 * j + p, 2 * i + q] -= kpq
+    return H
+
+
+@njit(cache=True, fastmath=True)
+def _free_force_dot(x, types, nfree, ci, cj, sig, eps, rc, rc2, us, dus, phi, f):
+    cluster_forces(x, types, nfree, ci, cj, sig, eps, rc, rc2, us, dus, f, 1.0, 0.0, 0.0, 1.0, 1.0)
+    s = 0.0
+    for i in range(nfree):
+        s += phi[2 * i] * f[i, 0] + phi[2 * i + 1] * f[i, 1]
+    return s
+
+
+@njit(cache=True, fastmath=True)
+def softmode_yield(X0, types, nfree, ci, cj, thetas, n_modes, sig, eps, rc, rc2, us, dus):
+    """Cubic soft-mode estimate of the yield strain for each direction.
+
+    Along each of the n_modes softest modes phi_k (eigenvalue lambda_k) of the
+    frozen-boundary cluster, the energy is expanded to third order,
+    E(q) = lambda q^2/2 + kappa q^3/6, and simple shear along theta adds the
+    generalised force gamma*h_k with h_k = phi_k . dF/dgamma. The mode loses
+    stability (saddle-node, Maloney & Lemaitre 2006) at
+    gamma_k = -lambda_k^2 / (2 kappa_k h_k) when that is positive. The estimate
+    is the minimum over modes. Returns (gamma_pred [n_theta], lambda_min).
+    """
+    n = X0.shape[0]
+    H = cluster_hessian(X0, types, nfree, ci, cj, sig, eps, rc, rc2, us, dus)
+    w, V = np.linalg.eigh(H)
+    f = np.zeros((n, 2))
+    xs = X0.copy()
+    m = min(n_modes, 2 * nfree)
+    kappa = np.zeros(m)
+    s = 1e-3
+    for k in range(m):
+        phi = V[:, k].copy()
+        g = np.zeros(3)
+        for c in range(3):
+            step = (c - 1) * s
+            for i in range(nfree):
+                xs[i, 0] = X0[i, 0] + step * phi[2 * i]
+                xs[i, 1] = X0[i, 1] + step * phi[2 * i + 1]
+            g[c] = _free_force_dot(xs, types, nfree, ci, cj, sig, eps, rc, rc2, us, dus, phi, f)
+        kappa[k] = -(g[2] - 2.0 * g[1] + g[0]) / (s * s)
+    nt = thetas.shape[0]
+    out = np.full(nt, np.inf)
+    d = 1e-6
+    fp = np.zeros((n, 2))
+    fm = np.zeros((n, 2))
+    xa = X0.copy()
+    for t in range(nt):
+        tx = math.cos(thetas[t])
+        ty = math.sin(thetas[t])
+        nx = -math.sin(thetas[t])
+        ny = math.cos(thetas[t])
+        for sgn in range(2):
+            dd = d if sgn == 0 else -d
+            for i in range(n):
+                sa = nx * X0[i, 0] + ny * X0[i, 1]
+                xa[i, 0] = X0[i, 0] + dd * sa * tx
+                xa[i, 1] = X0[i, 1] + dd * sa * ty
+            if sgn == 0:
+                cluster_forces(xa, types, nfree, ci, cj, sig, eps, rc, rc2, us, dus, fp,
+                               1.0, 0.0, 0.0, 1.0, 1.0)
+            else:
+                cluster_forces(xa, types, nfree, ci, cj, sig, eps, rc, rc2, us, dus, fm,
+                               1.0, 0.0, 0.0, 1.0, 1.0)
+        for k in range(m):
+            h = 0.0
+            for i in range(nfree):
+                h += V[2 * i, k] * (fp[i, 0] - fm[i, 0]) + V[2 * i + 1, k] * (fp[i, 1] - fm[i, 1])
+            h /= 2.0 * d
+            den = 2.0 * kappa[k] * h
+            if den < 0.0:
+                gk = -w[k] * w[k] / den
+                if gk < out[t]:
+                    out[t] = gk
+    return out, w[0]
+
+
+@njit(cache=True, parallel=True)
+def softmode_all(pos, types, L, centers, thetas, r_free, n_modes, sig, eps, rc, rc2, us, dus):
+    nc = centers.shape[0]
+    nt = thetas.shape[0]
+    gp = np.zeros((nc, nt))
+    lmin = np.zeros(nc)
+    r_tot = r_free + RCMAX
+    for k in prange(nc):
+        X, typ, nfree, idx = extract_cluster(pos, types, L, centers[k], r_free, r_tot)
+        ci, cj = cluster_pairs(X, RCMAX + 1.2)
+        g, l0 = softmode_yield(X, typ, nfree, ci, cj, thetas, n_modes, sig, eps, rc, rc2,
+                               us, dus)
+        gp[k] = g
+        lmin[k] = l0
+    return gp, lmin
+
+
+@njit(cache=True, fastmath=True)
+def softmode_terms(X0, types, nfree, ci, cj, thetas, n_modes, sig, eps, rc, rc2, us, dus):
+    """Return (lambda[m], kappa[m], h[n_theta, m]) of the softmode expansion."""
+    n = X0.shape[0]
+    H = cluster_hessian(X0, types, nfree, ci, cj, sig, eps, rc, rc2, us, dus)
+    w, V = np.linalg.eigh(H)
+    f = np.zeros((n, 2))
+    xs = X0.copy()
+    m = min(n_modes, 2 * nfree)
+    kappa = np.zeros(m)
+    s = 1e-3
+    for k in range(m):
+        phi = V[:, k].copy()
+        g = np.zeros(3)
+        for c in range(3):
+            step = (c - 1) * s
+            for i in range(nfree):
+                xs[i, 0] = X0[i, 0] + step * phi[2 * i]
+                xs[i, 1] = X0[i, 1] + step * phi[2 * i + 1]
+            g[c] = _free_force_dot(xs, types, nfree, ci, cj, sig, eps, rc, rc2, us, dus, phi, f)
+        kappa[k] = -(g[2] - 2.0 * g[1] + g[0]) / (s * s)
+    nt = thetas.shape[0]
+    hh = np.zeros((nt, m))
+    d = 1e-6
+    fp = np.zeros((n, 2))
+    fm = np.zeros((n, 2))
+    xa = X0.copy()
+    for t in range(nt):
+        tx = math.cos(thetas[t])
+        ty = math.sin(thetas[t])
+        nx = -math.sin(thetas[t])
+        ny = math.cos(thetas[t])
+        for i in range(n):
+            sa = nx * X0[i, 0] + ny * X0[i, 1]
+            xa[i, 0] = X0[i, 0] + d * sa * tx
+            xa[i, 1] = X0[i, 1] + d * sa * ty
+        cluster_forces(xa, types, nfree, ci, cj, sig, eps, rc, rc2, us, dus, fp, 1.0, 0.0, 0.0, 1.0, 1.0)
+        for i in range(n):
+            sa = nx * X0[i, 0] + ny * X0[i, 1]
+            xa[i, 0] = X0[i, 0] - d * sa * tx
+            xa[i, 1] = X0[i, 1] - d * sa * ty
+        cluster_forces(xa, types, nfree, ci, cj, sig, eps, rc, rc2, us, dus, fm, 1.0, 0.0, 0.0, 1.0, 1.0)
+        for k in range(m):
+            h = 0.0
+            for i in range(nfree):
+                h += V[2 * i, k] * (fp[i, 0] - fm[i, 0]) + V[2 * i + 1, k] * (fp[i, 1] - fm[i, 1])
+            hh[t, k] = h / (2.0 * d)
+    return w[:m].copy(), kappa, hh
+
+
+@njit(cache=True, parallel=True)
+def softmode_terms_all(pos, types, L, centers, thetas, r_free, n_modes, sig, eps, rc, rc2, us, dus):
+    nc = centers.shape[0]
+    nt = thetas.shape[0]
+    W = np.zeros((nc, n_modes))
+    K = np.zeros((nc, n_modes))
+    Hh = np.zeros((nc, nt, n_modes))
+    r_tot = r_free + RCMAX
+    for k in prange(nc):
+        X, typ, nfree, idx = extract_cluster(pos, types, L, centers[k], r_free, r_tot)
+        ci, cj = cluster_pairs(X, RCMAX + 1.2)
+        w, ka, hh = softmode_terms(X, typ, nfree, ci, cj, thetas, n_modes, sig, eps, rc, rc2,
+                                   us, dus)
+        W[k] = w
+        K[k] = ka
+        Hh[k] = hh
+    return W, K, Hh

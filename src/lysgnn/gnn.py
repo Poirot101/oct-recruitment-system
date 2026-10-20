@@ -72,9 +72,9 @@ class EdgeConv(nn.Module):
 
 
 class LYSNet(nn.Module):
-    def __init__(self, n_out=6, hidden=64, layers=6, edim=16 + 8 + 4 + 1):
+    def __init__(self, n_out=6, hidden=64, layers=6, edim=16 + 8 + 4 + 1, n_in=2):
         super().__init__()
-        self.embed = nn.Linear(2, hidden)
+        self.embed = nn.Linear(n_in, hidden)
         self.convs = nn.ModuleList([EdgeConv(hidden, edim) for _ in range(layers)])
         self.head = nn.Sequential(nn.Linear(hidden, hidden), nn.SiLU(), nn.Linear(hidden, n_out))
 
