@@ -1,0 +1,76 @@
+{
+ "n_sites": 48,
+ "n_theta": 6,
+ "baseline": {
+  "wall_s": 295.5097838959998,
+  "iterations": 51317125
+ },
+ "accelerated": [
+  {
+   "dg_coarse": 0.001,
+   "slope_frac": 0.5,
+   "wall_s": 32.898255126000095,
+   "iterations": 5778275,
+   "speedup_wall": 8.982536695766974,
+   "speedup_iterations": 8.881045813845828,
+   "frac_tauc_within_1e-3": 0.9965277777777778,
+   "frac_min_over_theta_within_1e-3": 1.0,
+   "max_abs_err": 0.5337817811071629
+  },
+  {
+   "dg_coarse": 0.001,
+   "slope_frac": 0.8,
+   "wall_s": 36.18748013499999,
+   "iterations": 6461225,
+   "speedup_wall": 8.166077958276713,
+   "speedup_iterations": 7.942321309039695,
+   "frac_tauc_within_1e-3": 1.0,
+   "frac_min_over_theta_within_1e-3": 1.0,
+   "max_abs_err": 0.0004874738722306926
+  },
+  {
+   "dg_coarse": 0.002,
+   "slope_frac": 0.5,
+   "wall_s": 21.813823212999978,
+   "iterations": 3903698,
+   "speedup_wall": 13.546904685644027,
+   "speedup_iterations": 13.145772290786839,
+   "frac_tauc_within_1e-3": 0.9930555555555556,
+   "frac_min_over_theta_within_1e-3": 0.9791666666666666,
+   "max_abs_err": 1.0497152998619903
+  },
+  {
+   "dg_coarse": 0.002,
+   "slope_frac": 0.8,
+   "wall_s": 26.908791856000107,
+   "iterations": 4722299,
+   "speedup_wall": 10.981904556599675,
+   "speedup_iterations": 10.866979198055862,
+   "frac_tauc_within_1e-3": 0.9965277777777778,
+   "frac_min_over_theta_within_1e-3": 1.0,
+   "max_abs_err": 0.5337001896374832
+  },
+  {
+   "dg_coarse": 0.004,
+   "slope_frac": 0.5,
+   "wall_s": 16.966792001000158,
+   "iterations": 2987042,
+   "speedup_wall": 17.41695094031801,
+   "speedup_iterations": 17.179914109008177,
+   "frac_tauc_within_1e-3": 0.9861111111111112,
+   "frac_min_over_theta_within_1e-3": 0.9791666666666666,
+   "max_abs_err": 0.7367050570104752
+  },
+  {
+   "dg_coarse": 0.004,
+   "slope_frac": 0.8,
+   "wall_s": 22.003460781000058,
+   "iterations": 3941358,
+   "speedup_wall": 13.43015023123871,
+   "speedup_iterations": 13.020163354863984,
+   "frac_tauc_within_1e-3": 0.9965277777777778,
+   "frac_min_over_theta_within_1e-3": 1.0,
+   "max_abs_err": 0.5337001896503261
+  }
+ ]
+}

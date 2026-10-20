@@ -1,3 +1,7 @@
-.vercel
-.env*.local
-node_modules
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+*.log
+!results/data/make.log
+.env*
