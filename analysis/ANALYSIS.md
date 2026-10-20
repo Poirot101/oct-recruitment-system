@@ -58,8 +58,14 @@ tolerance to f_max < 1e-6 lifts the exact speed-up to **18×**, with 288/288 yie
 matching. More training data barely moves the physics-informed surrogates (Spearman ≈ 0.49 on the
 weakest direction), and screening the weakest half of the sites saves only 2× at 89% recall.
 A raw-structure GNN starts learning only beyond about 8 glasses. On real plastic events, the
-exact LYS map is the best predictor, but per-atom potential energy comes close, which points to a
-cheap extra feature for the next model.
+exact LYS map is the best predictor.
+
+**Round-3 update (Sect. 4.6 and 6).** The apparent energy result was mostly an artefact: the
+event locator favours small particles, which have higher energy. With type controlled, energy is
+no better than the soft-mode surrogates, while the exact LYS map stays the best predictor under
+every control. A review of 48 papers (Sect. 6, `LITERATURE.md`) found no published adaptive-step
+AQS scheme, so the 18× exact speed-up appears to be new. It also shows our data needs are one to
+two orders of magnitude below those of prior ML studies.
 
 ## 2. What the main paper says about cost (Bamer et al. 2023)
 
@@ -275,16 +281,68 @@ the early events fall in its weakest 10% of sites (random: 9%). The soft-mode su
 between the exact map and random (0.34–0.41). This is the expected order and confirms the
 round-1 trend with statistically separated intervals.
 
-The surprise is per-atom potential energy. It has no rank correlation with the LYS map (0.04),
-yet it predicts the yielding atom almost as well as the exact map (0.30, 63% of events in its
-weakest 30% against 64% for LYS). One plausible reading, not tested here, is that the event atom
-is picked as the largest non-affine displacement, which may favour loosely packed, high-energy
-atoms at the core of a rearrangement rather than the site whose local yield stress is lowest. If
-that holds, combining energy with the LYS or soft-mode field should beat either alone. Testing
-that combination, and locating events by the cluster centre instead of a single atom, are the
-obvious next experiments.
+The surprise was per-atom potential energy. It has no rank correlation with the LYS map (0.04),
+yet it appeared to predict the yielding atom almost as well as the exact map (0.30, 63% of events
+in its weakest 30% against 64% for LYS). Round 3 (Sect. 4.6) shows this was mostly an artefact
+of the event locator, which favours small, high-energy particles.
 
-### 4.6 Limits of this study
+### 4.6 Round 3: does per-atom energy really predict plastic events?
+
+Round 2 found that per-atom potential energy placed the yielding atom almost as well as the exact
+LYS map, although the two fields are uncorrelated (Sect. 4.5). Round 3 tests whether this is real
+or an artefact of how events are located. The global AQS shear of all 20 glasses was re-run up
+to the 10th plastic event, this time keeping the full non-affine displacement field of every event
+(`scripts/round3_events.py`, `results/round3_events.json`, fields in `results/events/`).
+
+**The event locator is biased by particle type.** Small particles make up 55% of the glass but
+83% of the "largest non-affine displacement" atoms. Small particles also sit at higher energy
+(mean −1.89 against −2.51 for large ones), so a raw energy ranking partly just selects small
+particles. Ranking by particle type alone, with no structure at all, already scores 0.39
+(0.35–0.43) against 0.55 for random.
+
+**Once type is removed, energy is an ordinary predictor.** Two controls were applied:
+standardising energy within each particle type, and locating each event at the maximum of the
+neighbourhood-averaged displacement field (radius 1.5), which agrees with the single-atom locator
+in only 29% of events and lies 1.1 σ away on average. Under either control, energy falls from
+0.30 to 0.35–0.40, level with the soft-mode surrogates. The exact LYS map is unaffected: it stays
+at 0.28–0.29 under every locator and within each particle type.
+
+![Round-3 event test](figures/round3_events.png)
+
+| Predictor (θ = 0 field) | Atom locator | Centre locator | Within particle type | Events in weakest 10% (atom) |
+|---|---|---|---|---|
+| Exact LYS, neighbour-averaged | **0.27** (0.23–0.32) | **0.27** (0.23–0.31) | **0.27** | 35% |
+| Exact LYS map | 0.28 (0.24–0.32) | 0.29 (0.24–0.33) | 0.29 | 33% |
+| Exact LYS + energy (rank sum) | 0.26 (0.23–0.30) | 0.30 (0.26–0.34) | 0.26 | 35% |
+| Per-atom energy | 0.30 (0.26–0.34) | 0.35 (0.31–0.39) | 0.36 | 23% |
+| Energy standardised within type | 0.36 (0.31–0.40) | 0.40 (0.36–0.45) | 0.36 | 21% |
+| Soft modes + GNN | 0.35 (0.30–0.39) | 0.34 (0.30–0.38) | 0.35 | 20% |
+| Soft modes + boosting | 0.36 (0.32–0.40) | 0.36 (0.32–0.39) | 0.36 | 20% |
+| Particle type only | 0.39 (0.35–0.43) | 0.40 (0.37–0.43) | 0.55 | 10% |
+| Soft-mode estimate alone | 0.41 (0.35–0.46) | 0.41 (0.35–0.47) | 0.41 | 18% |
+| Random | 0.55 (0.52–0.58) | 0.55 (0.50–0.58) | 0.55 | 9% |
+
+*Mean weakness percentile of the event (0 = predicted weakest), with 95% bootstrap intervals over
+glasses; 200 events in 20 glasses.*
+
+Three conclusions follow.
+
+1. **The round-2 energy result was mostly a locator artefact.** It should not be used to argue
+   that energy is as good as LYS. This agrees with the benchmark of Richard et al. (2020), where
+   local energy is a weak indicator of the first plastic event, and with Widmer-Cooper and
+   Harrowell (2006), who found inherent-structure energy correlates poorly with dynamic propensity.
+2. **Adding energy to LYS does not help robustly.** The rank sum gains 0.02 with the atom locator
+   and loses 0.01 with the centre locator, both inside the intervals.
+3. **Averaging the LYS map over neighbours helps slightly under every locator** (0.27 against
+   0.28–0.29). An STZ involves several atoms, so the coarse-grained field is the better target for
+   a surrogate. This matches Boattini et al. (2021), who found neighbourhood averaging to be the
+   key ingredient for structure-based prediction.
+
+A third locator was also tried: the weakest predicted site within radius 2 of the event centre.
+It is not reported, because a random field already scores 0.08 under it (a minimum over about
+13 sites), so it cannot separate the predictors.
+
+### 4.7 Limits of this study
 
 * 2D, a single quench protocol, N = 1024. Round 1 used 8 glasses (5 train, 1 validation, 2 test),
   and round 2 extends this to 20 glasses with 5-fold cross-validation (Sect. 4.5).
@@ -317,8 +375,10 @@ In order of payoff per effort:
    physics-feature models have plateaued, so data is now the bottleneck for learned models. τ_c(θ) is
    π-periodic, so predict its Fourier coefficients in 2θ with an E(2)-equivariant network
    (in the spirit of NequIP, Batzner et al. 2022). The symmetry is then exact rather than augmented,
-   which should reduce the data the raw-structure model needs. Add per-atom energy as an input:
-   it predicts real plastic events almost as well as the exact LYS map (Sect. 4.5). Bapst et al. (2020) showed GNNs can
+   which should reduce the data the raw-structure model needs. Train on the neighbour-averaged LYS
+   field, which predicts real events slightly better than the raw map (Sect. 4.6). When validating
+   against plastic events, locate them by a neighbourhood-averaged displacement and check within
+   each particle type, or the comparison is biased by particle size (Sect. 4.6). Bapst et al. (2020) showed GNNs can
    read glassy dynamics from static structure when data is plentiful.
 5. **Active learning.** Use model uncertainty (ensembles) to choose which sites get the exact scan,
    mirroring how GFF-MAP uses multiple SEVMs per pore for robust, probabilistic screening.
@@ -332,7 +392,71 @@ In order of payoff per effort:
    elasto-plastic models need (Castellanos et al., review refs. 206–207). This is the multiscale
    route of Sect. 11.2.
 
-## 6. References
+## 6. Related literature and where this work sits
+
+The full annotated list of 48 verified papers is in [LITERATURE.md](LITERATURE.md). This section
+places the results above within that literature.
+
+**Structural indicators.** The reference benchmark is Richard et al. (2020). It compared about 20
+indicators on 2D binary LJ glasses like ours and found that indicators built from the Hessian
+(soft modes, nonlinear quasilocalised modes) and the residual plastic strength, which is the LYS
+of Patinet et al. (2016) and Barbot et al. (2018), predict the first AQS events best. Purely
+structural quantities such as local energy or free volume do poorly. Our ranking matches that
+benchmark: exact LYS first, Hessian-based soft-mode surrogates second, local energy last once the
+particle-type bias is removed (Sect. 4.6). LYS has since been extended to 3D, where Ruan et al.
+(2022) found the best probe radius to be about 5σ and showed that the full yield surface is
+anisotropic. Lerbinger et al. (2022) showed that LYS also predicts thermal relaxation in supercooled
+liquids. Both results multiply the number of LYS calculations a study needs, which is why the cost
+reductions here matter beyond athermal shear.
+
+**Cheap physics proxies.** Our soft-mode saddle-node estimate belongs to a family going back to
+Manning and Liu (2011), who showed that low-frequency modes locate soft spots, and Maloney and
+Lacks (2006), who derived the δ^(3/2) barrier scaling near an instability that our extrapolation
+relies on. Xu et al. (2018) predicted the triggering strain of individual STZs by following
+minimum-energy paths, which is the closest precedent for our estimate. Nonlinear and
+quasilocalised modes (Gartner and Lerner 2016; Kapteijns et al. 2020; Richard et al. 2021) avoid the
+hybridisation with phonons that limits harmonic eigenvectors. Using them instead of harmonic modes
+is the most promising way to raise the proxy above its current Spearman ≈ 0.4.
+
+**Machine learning.** GNNs on raw positions work for glassy dynamics when data is plentiful
+(Bapst et al. 2020, about 400 configurations of 4096 particles per state point). Simple models on
+physically motivated, neighbourhood-averaged descriptors match them with far less data (Boattini
+et al. 2021; GlassMLP, Jung et al. 2023, about 100 training structures). Our result follows the same
+pattern. The physics-feature models are already at their ceiling with two glasses, and the
+raw-structure GNN only begins to learn beyond about eight glasses of 1024 atoms, which is one to
+two orders of magnitude less data than those studies used. The closest prior LYS surrogate is the
+image model of Xiao et al. (2023), which predicts per-particle local yield stress to feed a
+structuro-elastoplastic model of ductility. Fan and Ma (2021) predict orientation-dependent shear
+susceptibility, the same angular structure as our six-direction LYS. Rotation-equivariant GNNs for
+glasses (Pezzicoli et al. 2024) and equivariant interatomic potentials (NequIP, Batzner et al. 2022;
+Allegro, Musaelian et al. 2023) report large gains in data efficiency, which supports recommendation 4.
+For 2D silica, the network glass the review highlights, Font-Clos et al. (2022) trained a CNN on
+about 720 samples to predict failure strain, and its attention maps tracked per-atom energy.
+Energy may therefore matter more for failure of network glasses than for the first shear
+transformation in LJ glasses, a distinction worth testing when the work moves to silica.
+
+**Faster simulation.** FIRE (Bitzek et al. 2006) and FIRE 2.0 (Guénolé et al. 2020) are the
+standard AQS minimisers, and JAX-MD (Schoenholz and Cubuk 2020), LAMMPS (Thompson et al. 2022) and
+HOOMD-blue (Anderson et al. 2020) provide GPU paths. Saddle-search methods such as ART nouveau
+(Barkema and Mousseau 1996; Malek and Mousseau 2000), the dimer method (Henkelman and Jónsson 1999)
+and CI-NEB (Henkelman et al. 2000) find barriers without driving the system. We found no
+published adaptive or event-driven strain-stepping scheme for AQS. Richard et al. (2020), for
+example, still use a fixed Δγ = 10⁻⁵ "in order not to miss plastic events". The certified adaptive
+stepping of Sect. 4.1 and 4.5 therefore appears to be a methodological contribution in its own
+right, and it applies unchanged to every protocol above.
+
+**Downstream use.** Elasto-plastic models consume exactly the local thresholds that LYS measures
+(Nicolas et al. 2018). Fernández Castellanos et al. (2021, 2022) calibrated such models on LYS
+maps of 2D LJ glasses and reproduced history-dependent plasticity. A fast, exact LYS scan is
+therefore what makes atomistically informed EPMs practical at scale, which is the multiscale route
+of Bamer Sect. 11.2.
+
+**Active learning.** Query-by-committee active learning (Smith et al. 2018) and uncertainty-driven
+adaptive sampling (Lookman et al. 2019) reach a given accuracy with a fraction of the labels.
+With exact LYS at 333 s per glass and soft modes at 4 s, selecting which glasses or sites get the
+exact scan is a natural next step (recommendation 5).
+
+## 7. References
 
 * Bamer F., Ebrahem F., Markert B., Stamm B. Molecular mechanics of disordered solids. *Arch. Comput. Methods Eng.* 30, 2105–2180 (2023).
 * Loiodice L., Stopka K.S., Sun Y., Lin G., Sangid M.D. Grain-level micromechanical modeling and assessment of fatigue-critical pores using graph neural networks. *npj Comput. Mater.* 12, 275 (2026).
@@ -350,3 +474,29 @@ In order of payoff per effort:
 * Gilmer J. et al. Neural message passing for quantum chemistry. *ICML* (2017), arXiv:1704.01212.
 * Monti F. et al. Geometric deep learning on graphs and manifolds using mixture model CNNs. *CVPR* (2017), arXiv:1611.08402.
 * Batzner S. et al. E(3)-equivariant graph neural networks for data-efficient and accurate interatomic potentials. *Nat. Commun.* 13, 2453 (2022).
+* Ruan D., Patinet S., Falk M.L. Predicting plastic events and quantifying the local yield surface in 3D model glasses. *J. Mech. Phys. Solids* 158, 104671 (2022).
+* Lerbinger M., Barbot A., Vandembroucq D., Patinet S. Relevance of shear transformations in the relaxation of supercooled liquids. *Phys. Rev. Lett.* 129, 195501 (2022).
+* Maloney C.E., Lacks D.J. Energy barrier scalings in driven systems. *Phys. Rev. E* 73, 061106 (2006).
+* Xu B., Falk M.L., Li J.F., Kong L.T. Predicting shear transformation events in metallic glasses. *Phys. Rev. Lett.* 120, 125503 (2018).
+* Gartner L., Lerner E. Nonlinear modes disentangle glassy and Goldstone modes in structural glasses. *SciPost Phys.* 1, 016 (2016).
+* Kapteijns G., Richard D., Lerner E. Nonlinear quasilocalized excitations in glasses. I. True representatives of soft spots. *Phys. Rev. E* 101, 032130 (2020).
+* Richard D., Kapteijns G., Giannini J.A., Manning M.L., Lerner E. Simple and broadly applicable definition of shear transformation zones. *Phys. Rev. Lett.* 126, 015501 (2021).
+* Widmer-Cooper A., Harrowell P. Predicting the long-time dynamic heterogeneity in a supercooled liquid on the basis of short-time heterogeneities. *Phys. Rev. Lett.* 96, 185701 (2006).
+* Boattini E., Smallenburg F., Filion L. Averaging local structure to predict the dynamic propensity in supercooled liquids. *Phys. Rev. Lett.* 127, 088007 (2021).
+* Jung G., Biroli G., Berthier L. Predicting dynamic heterogeneity in glass-forming liquids by physics-inspired machine learning. *Phys. Rev. Lett.* 130, 238202 (2023).
+* Xiao H. et al. Identifying microscopic factors that influence ductility in disordered solids. *PNAS* 120, e2307552120 (2023).
+* Pezzicoli F.S., Charpiat G., Landes F.P. Rotation-equivariant graph neural networks for learning glassy liquids representations. *SciPost Phys.* 16, 136 (2024).
+* Musaelian A. et al. Learning local equivariant representations for large-scale atomistic dynamics. *Nat. Commun.* 14, 579 (2023).
+* Font-Clos F. et al. Predicting the failure of two-dimensional silica glasses. *Nat. Commun.* 13, 2820 (2022).
+* Schoenholz S.S., Cubuk E.D. JAX MD: A framework for differentiable physics. *NeurIPS* 33 (2020).
+* Thompson A.P. et al. LAMMPS: a flexible simulation tool for particle-based materials modeling at the atomic, meso, and continuum scales. *Comput. Phys. Commun.* 271, 108171 (2022).
+* Anderson J.A., Glaser J., Glotzer S.C. HOOMD-blue: A Python package for high-performance molecular dynamics and hard particle Monte Carlo simulations. *Comput. Mater. Sci.* 173, 109363 (2020).
+* Barkema G.T., Mousseau N. Event-based relaxation of continuous disordered systems. *Phys. Rev. Lett.* 77, 4358 (1996).
+* Malek R., Mousseau N. Dynamics of Lennard-Jones clusters: A characterization of the activation-relaxation technique. *Phys. Rev. E* 62, 7723 (2000).
+* Henkelman G., Jónsson H. A dimer method for finding saddle points on high dimensional potential surfaces using only first derivatives. *J. Chem. Phys.* 111, 7010 (1999).
+* Henkelman G., Uberuaga B.P., Jónsson H. A climbing image nudged elastic band method for finding saddle points and minimum energy paths. *J. Chem. Phys.* 113, 9901 (2000).
+* Nicolas A., Ferrero E.E., Martens K., Barrat J.-L. Deformation and flow of amorphous solids: Insights from elastoplastic models. *Rev. Mod. Phys.* 90, 045006 (2018).
+* Fernández Castellanos D., Roux S., Patinet S. Insights from the quantitative calibration of an elasto-plastic model from a Lennard-Jones atomic glass. *C. R. Physique* 22(S3), 135–162 (2021).
+* Castellanos D.F., Roux S., Patinet S. History dependent plasticity of glass: A mapping between atomistic and elasto-plastic models. *Acta Mater.* 241, 118405 (2022).
+* Smith J.S., Nebgen B., Lubbers N., Isayev O., Roitberg A.E. Less is more: Sampling chemical space with active learning. *J. Chem. Phys.* 148, 241733 (2018).
+* Lookman T., Balachandran P.V., Xue D., Yuan R. Active learning in materials science with emphasis on adaptive sampling using uncertainties for targeted design. *npj Comput. Mater.* 5, 21 (2019).

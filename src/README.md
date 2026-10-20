@@ -35,3 +35,10 @@ python scripts/softmode_features.py ../results/data ../results/softmode 18 19 20
 python scripts/round2_study.py ../results/data ../results/softmode ../results/round2.json
 python scripts/round2_figures.py ../results/round2.json ../analysis/figures
 ```
+
+## Round 3 (about 40 min on 4 cores)
+
+```bash
+python scripts/round3_events.py ../results/data ../results/softmode ../results/round2 ../results/round3_events.json --workers 4
+python scripts/round3_figures.py ../results/round3_events.json ../analysis/figures
+```
